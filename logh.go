@@ -56,7 +56,6 @@ const (
 
 var (
 	stdout zerolog.Logger
-	stderr zerolog.Logger
 
 	// InfoEnabled - check if this level is enabled
 	InfoEnabled bool
@@ -136,18 +135,14 @@ func ConfigureGlobalLogger(lvl Level, fmt Format) {
 	}
 
 	var out io.Writer
-	var err io.Writer
 
 	if fmt == CONSOLE {
 		out = zerolog.ConsoleWriter{Out: os.Stdout}
-		err = zerolog.ConsoleWriter{Out: os.Stderr}
 	} else {
 		out = os.Stdout
-		err = os.Stderr
 	}
 
 	stdout = zerolog.New(out).With().Timestamp().Logger()
-	stderr = zerolog.New(err).With().Timestamp().Logger()
 
 	InfoEnabled = Info() != nil
 	DebugEnabled = Debug() != nil
@@ -189,7 +184,7 @@ func Warn() *zerolog.Event {
 
 // Error - returns the error event logger if any
 func Error() *zerolog.Event {
-	if e := stderr.Error(); e.Enabled() {
+	if e := stdout.Error(); e.Enabled() {
 		return e
 	}
 	return nil
@@ -197,7 +192,7 @@ func Error() *zerolog.Event {
 
 // Panic - returns the error event logger if any
 func Panic() *zerolog.Event {
-	if e := stderr.Panic(); e.Enabled() {
+	if e := stdout.Panic(); e.Enabled() {
 		return e
 	}
 	return nil
@@ -205,7 +200,7 @@ func Panic() *zerolog.Event {
 
 // Fatal - returns the error event logger if any
 func Fatal() *zerolog.Event {
-	if e := stderr.Fatal(); e.Enabled() {
+	if e := stdout.Fatal(); e.Enabled() {
 		return e
 	}
 	return nil

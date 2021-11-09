@@ -55,7 +55,7 @@ const (
 )
 
 var (
-	stdout zerolog.Logger
+	logger zerolog.Logger
 
 	// InfoEnabled - check if this level is enabled
 	InfoEnabled bool
@@ -113,7 +113,7 @@ func (el *ContextualLogger) Panic() *zerolog.Event {
 }
 
 // ConfigureGlobalLogger - configures the logger globally
-func ConfigureGlobalLogger(lvl Level, fmt Format) {
+func ConfigureGlobalLogger(lvl Level, fmt Format) zerolog.Logger {
 
 	switch lvl {
 	case INFO:
@@ -142,7 +142,7 @@ func ConfigureGlobalLogger(lvl Level, fmt Format) {
 		out = os.Stdout
 	}
 
-	stdout = zerolog.New(out).With().Timestamp().Logger()
+	logger = zerolog.New(out).With().Timestamp().Logger()
 
 	InfoEnabled = Info() != nil
 	DebugEnabled = Debug() != nil
@@ -150,6 +150,8 @@ func ConfigureGlobalLogger(lvl Level, fmt Format) {
 	ErrorEnabled = Error() != nil
 	PanicEnabled = Panic() != nil
 	FatalEnabled = Fatal() != nil
+
+	return logger
 }
 
 // SendToStdout - logs a output with no log format
@@ -160,7 +162,7 @@ func SendToStdout(output string) {
 
 // Info - returns the info event logger if any
 func Info() *zerolog.Event {
-	if e := stdout.Info(); e.Enabled() {
+	if e := logger.Info(); e.Enabled() {
 		return e
 	}
 	return nil
@@ -168,7 +170,7 @@ func Info() *zerolog.Event {
 
 // Debug - returns the debug event logger if any
 func Debug() *zerolog.Event {
-	if e := stdout.Debug(); e.Enabled() {
+	if e := logger.Debug(); e.Enabled() {
 		return e
 	}
 	return nil
@@ -176,7 +178,7 @@ func Debug() *zerolog.Event {
 
 // Warn - returns the error event logger if any
 func Warn() *zerolog.Event {
-	if e := stdout.Warn(); e.Enabled() {
+	if e := logger.Warn(); e.Enabled() {
 		return e
 	}
 	return nil
@@ -184,7 +186,7 @@ func Warn() *zerolog.Event {
 
 // Error - returns the error event logger if any
 func Error() *zerolog.Event {
-	if e := stdout.Error(); e.Enabled() {
+	if e := logger.Error(); e.Enabled() {
 		return e
 	}
 	return nil
@@ -192,7 +194,7 @@ func Error() *zerolog.Event {
 
 // Panic - returns the error event logger if any
 func Panic() *zerolog.Event {
-	if e := stdout.Panic(); e.Enabled() {
+	if e := logger.Panic(); e.Enabled() {
 		return e
 	}
 	return nil
@@ -200,7 +202,7 @@ func Panic() *zerolog.Event {
 
 // Fatal - returns the error event logger if any
 func Fatal() *zerolog.Event {
-	if e := stdout.Fatal(); e.Enabled() {
+	if e := logger.Fatal(); e.Enabled() {
 		return e
 	}
 	return nil

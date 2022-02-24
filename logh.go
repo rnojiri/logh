@@ -1,9 +1,11 @@
 package logh
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"os"
+	"reflect"
 
 	"github.com/rs/zerolog"
 )
@@ -74,46 +76,55 @@ var (
 
 	// PanicEnabled - check if this level is enabled
 	PanicEnabled bool
+
+	// ErrWrongNumberOfArgs ...
+	ErrWrongNumberOfArgs error = errors.New("the number of arguments must be even")
 )
 
 // ContextualLogger - a struct containing all valid event loggers (each one can be null if not enabled)
 type ContextualLogger struct {
 	numKeyValues int
-	keyValues    []string
+	keyValues    []interface{}
 }
 
 // Info - returns the event logger using the configured context
-func (el *ContextualLogger) Info() *zerolog.Event {
-	return el.addContext(Info())
+func (cl *ContextualLogger) Info() *zerolog.Event {
+	return cl.addContext(Info())
 }
 
 // Debug - returns the event logger using the configured context
-func (el *ContextualLogger) Debug() *zerolog.Event {
-	return el.addContext(Debug())
+func (cl *ContextualLogger) Debug() *zerolog.Event {
+	return cl.addContext(Debug())
 }
 
 // Warn - returns the event logger using the configured context
-func (el *ContextualLogger) Warn() *zerolog.Event {
-	return el.addContext(Warn())
+func (cl *ContextualLogger) Warn() *zerolog.Event {
+	return cl.addContext(Warn())
 }
 
 // Error - returns the event logger using the configured context
-func (el *ContextualLogger) Error() *zerolog.Event {
-	return el.addContext(Error())
+func (cl *ContextualLogger) Error() *zerolog.Event {
+	return cl.addContext(Error())
 }
 
 // Fatal - returns the event logger using the configured context
-func (el *ContextualLogger) Fatal() *zerolog.Event {
-	return el.addContext(Fatal())
+func (cl *ContextualLogger) Fatal() *zerolog.Event {
+	return cl.addContext(Fatal())
 }
 
 // Panic - returns the event logger using the configured context
-func (el *ContextualLogger) Panic() *zerolog.Event {
-	return el.addContext(Panic())
+func (cl *ContextualLogger) Panic() *zerolog.Event {
+	return cl.addContext(Panic())
 }
 
 // ConfigureGlobalLogger - configures the logger globally
-func ConfigureGlobalLogger(lvl Level, fmt Format) zerolog.Logger {
+func ConfigureGlobalLogger(lvl Level, fmt Format) *zerolog.Logger {
+
+	return ConfigureCustomLogger(lvl, fmt, os.Stdout)
+}
+
+// ConfigureCustomLogger - configures the logger globally
+func ConfigureCustomLogger(lvl Level, fmt Format, out io.Writer) *zerolog.Logger {
 
 	switch lvl {
 	case INFO:
@@ -134,15 +145,15 @@ func ConfigureGlobalLogger(lvl Level, fmt Format) zerolog.Logger {
 		zerolog.SetGlobalLevel(zerolog.Disabled)
 	}
 
-	var out io.Writer
+	var writer io.Writer
 
 	if fmt == CONSOLE {
-		out = zerolog.ConsoleWriter{Out: os.Stdout}
+		writer = zerolog.ConsoleWriter{Out: out}
 	} else {
-		out = os.Stdout
+		writer = out
 	}
 
-	logger = zerolog.New(out).With().Timestamp().Logger()
+	logger = zerolog.New(writer).With().Timestamp().Logger()
 
 	InfoEnabled = Info() != nil
 	DebugEnabled = Debug() != nil
@@ -151,7 +162,7 @@ func ConfigureGlobalLogger(lvl Level, fmt Format) zerolog.Logger {
 	PanicEnabled = Panic() != nil
 	FatalEnabled = Fatal() != nil
 
-	return logger
+	return &logger
 }
 
 // SendToStdout - logs a output with no log format
@@ -208,12 +219,18 @@ func Fatal() *zerolog.Event {
 	return nil
 }
 
+// Logger - returns the logger itself
+func Logger() *zerolog.Logger {
+
+	return &logger
+}
+
 // CreateContextualLogger - creates loggers with context
-func CreateContextualLogger(keyValues ...string) *ContextualLogger {
+func CreateContextualLogger(keyValues ...interface{}) *ContextualLogger {
 
 	numKeyValues := len(keyValues)
 	if numKeyValues%2 != 0 {
-		panic("the number of arguments must be even")
+		panic(ErrWrongNumberOfArgs)
 	}
 
 	return &ContextualLogger{
@@ -222,16 +239,101 @@ func CreateContextualLogger(keyValues ...string) *ContextualLogger {
 	}
 }
 
+// Append - appends more context
+func (cl *ContextualLogger) Append(keyValues ...interface{}) error {
+
+	numKeyValues := len(keyValues)
+	if numKeyValues%2 != 0 {
+		return ErrWrongNumberOfArgs
+	}
+
+	cl.keyValues = append(cl.keyValues, keyValues...)
+	cl.numKeyValues += numKeyValues
+
+	return nil
+}
+
 // addContext - add event logger context
-func (el *ContextualLogger) addContext(eventlLogger *zerolog.Event) *zerolog.Event {
+func (cl *ContextualLogger) addContext(eventlLogger *zerolog.Event) *zerolog.Event {
 
 	if eventlLogger == nil {
 		return nil
 	}
 
-	for j := 0; j < el.numKeyValues; j += 2 {
-		eventlLogger = eventlLogger.Str(el.keyValues[j], el.keyValues[j+1])
+	for j := 0; j < cl.numKeyValues; j += 2 {
+
+		key := cl.keyValues[j].(string)
+		value := reflect.ValueOf(cl.keyValues[j+1])
+
+		switch value.Kind() {
+
+		case reflect.String:
+
+			eventlLogger = eventlLogger.Str(key, value.String())
+
+		case reflect.Int:
+
+			eventlLogger = eventlLogger.Int(key, int(value.Int()))
+
+		case reflect.Int8:
+
+			eventlLogger = eventlLogger.Int8(key, int8(value.Int()))
+
+		case reflect.Int16:
+
+			eventlLogger = eventlLogger.Int16(key, int16(value.Int()))
+
+		case reflect.Int32:
+
+			eventlLogger = eventlLogger.Int32(key, int32(value.Int()))
+
+		case reflect.Int64:
+
+			eventlLogger = eventlLogger.Int64(key, value.Int())
+
+		case reflect.Uint:
+
+			eventlLogger = eventlLogger.Uint(key, uint(value.Uint()))
+
+		case reflect.Uint8:
+
+			eventlLogger = eventlLogger.Uint8(key, uint8(value.Uint()))
+
+		case reflect.Uint16:
+
+			eventlLogger = eventlLogger.Uint16(key, uint16(value.Uint()))
+
+		case reflect.Uint32:
+
+			eventlLogger = eventlLogger.Uint32(key, uint32(value.Uint()))
+
+		case reflect.Uint64:
+
+			eventlLogger = eventlLogger.Uint64(key, value.Uint())
+
+		case reflect.Float32:
+
+			eventlLogger = eventlLogger.Float32(key, float32(value.Float()))
+
+		case reflect.Float64:
+
+			eventlLogger = eventlLogger.Float64(key, value.Float())
+
+		case reflect.Bool:
+
+			eventlLogger = eventlLogger.Bool(key, value.Bool())
+
+		default:
+
+			eventlLogger = eventlLogger.Interface(key, value.Interface())
+		}
 	}
 
 	return eventlLogger
+}
+
+// GetContexts - returns the logger contexts
+func (cl *ContextualLogger) GetContexts() []interface{} {
+
+	return cl.keyValues
 }

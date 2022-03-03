@@ -337,3 +337,26 @@ func (cl *ContextualLogger) GetContexts() []interface{} {
 
 	return cl.keyValues
 }
+
+// CreateFromContext - creates a new logger context from this context
+func (el *ContextualLogger) CreateFromContext(keyValues ...interface{}) (*ContextualLogger, error) {
+
+	cl := CreateContextualLogger(el.keyValues...)
+	err := cl.Append(keyValues...)
+	if err != nil {
+		return nil, err
+	}
+
+	return cl, nil
+}
+
+// MustCreateFromContext - creates a new logger context from this context, raises panic if some error
+func (el *ContextualLogger) MustCreateFromContext(keyValues ...interface{}) *ContextualLogger {
+
+	cl, err := el.CreateFromContext(keyValues...)
+	if err != nil {
+		panic(err)
+	}
+
+	return cl
+}

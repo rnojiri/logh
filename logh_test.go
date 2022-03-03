@@ -82,3 +82,42 @@ func TestContextualLoggerAppend(t *testing.T) {
 
 	assert.Equal(t, expected, strings.Trim(string(writer.Bytes()), "\n"), "expected same log message")
 }
+
+func TestCreateFromContext(t *testing.T) {
+
+	writer := logh.NewStringWriter(256)
+
+	logh.ConfigureCustomLogger(logh.INFO, logh.JSON, writer)
+
+	cl := logh.CreateContextualLogger("root_key", "root_val")
+
+	now := time.Now()
+
+	ncl, err := cl.CreateFromContext("node_key1", 1, "node_key2", 2)
+	assert.NoError(t, err, "expects no errors")
+
+	ncl.Info().Msg("create from context")
+
+	expected := fmt.Sprintf(`{"level":"info","root_key":"root_val","node_key1":1,"node_key2":2,"time":"%s","message":"create from context"}`, now.Format(time.RFC3339))
+
+	assert.Equal(t, expected, strings.Trim(string(writer.Bytes()), "\n"), "expected same log message")
+}
+
+func TestMustCreateFromContext(t *testing.T) {
+
+	writer := logh.NewStringWriter(256)
+
+	logh.ConfigureCustomLogger(logh.INFO, logh.JSON, writer)
+
+	cl := logh.CreateContextualLogger("root_key", "root_val")
+
+	now := time.Now()
+
+	ncl := cl.MustCreateFromContext("node_key3", 3, "node_key4", 4)
+
+	ncl.Info().Msg("must create from context")
+
+	expected := fmt.Sprintf(`{"level":"info","root_key":"root_val","node_key3":3,"node_key4":4,"time":"%s","message":"must create from context"}`, now.Format(time.RFC3339))
+
+	assert.Equal(t, expected, strings.Trim(string(writer.Bytes()), "\n"), "expected same log message")
+}

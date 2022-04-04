@@ -6,6 +6,7 @@ import (
 	"io"
 	"os"
 	"reflect"
+	"runtime"
 
 	"github.com/rs/zerolog"
 )
@@ -105,6 +106,25 @@ func (cl *ContextualLogger) Warn() *zerolog.Event {
 // Error - returns the event logger using the configured context
 func (cl *ContextualLogger) Error() *zerolog.Event {
 	return cl.addContext(Error())
+}
+
+// ErrorLine - returns the event logger using the configured context
+func (cl *ContextualLogger) ErrorLine() *zerolog.Event {
+
+	_, filename, line, ok := runtime.Caller(1)
+	ev := Error()
+	if !ok {
+		filename = "unknown"
+		line = -1
+	}
+
+	ev = ev.Str("_file_", filename)
+
+	if ok {
+		ev = ev.Int("_line_", line)
+	}
+
+	return cl.addContext(ev)
 }
 
 // Fatal - returns the event logger using the configured context

@@ -1,7 +1,9 @@
 package logh_test
 
 import (
+	"errors"
 	"fmt"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -118,6 +120,30 @@ func TestMustCreateFromContext(t *testing.T) {
 	ncl.Info().Msg("must create from context")
 
 	expected := fmt.Sprintf(`{"level":"info","root_key":"root_val","node_key3":3,"node_key4":4,"time":"%s","message":"must create from context"}`, now.Format(time.RFC3339))
+
+	assert.Equal(t, expected, strings.Trim(string(writer.Bytes()), "\n"), "expected same log message")
+}
+
+func getFileAndLine() (string, int) {
+	_, filename, line, _ := runtime.Caller(1)
+	return filename, line
+}
+
+func TestErrorLine(t *testing.T) {
+
+	writer := logh.NewStringWriter(256)
+
+	logh.ConfigureCustomLogger(logh.INFO, logh.JSON, writer)
+
+	now := time.Now()
+
+	logger := logh.CreateContextualLogger("pkg", "logh_test")
+
+	expectedFilename, expectedLine := getFileAndLine()
+	expectedLine += 2
+	logger.ErrorLine().Err(errors.New("test error")).Msg("message")
+
+	expected := fmt.Sprintf(`{"level":"error","_file_":"%s","_line_":%d,"pkg":"logh_test","error":"test error","time":"%s","message":"message"}`, expectedFilename, expectedLine, now.Format(time.RFC3339))
 
 	assert.Equal(t, expected, strings.Trim(string(writer.Bytes()), "\n"), "expected same log message")
 }

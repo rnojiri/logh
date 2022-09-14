@@ -9,9 +9,21 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/suite"
 
 	"github.com/uol/logh"
 )
+
+type testSuite struct {
+	suite.Suite
+	loggerBuffer *logh.StringWriter
+}
+
+func (ts *testSuite) SetupTest() {
+
+	ts.loggerBuffer = logh.NewStringWriter(256)
+	logh.ConfigureCustomLogger(logh.INFO, logh.JSON, ts.loggerBuffer)
+}
 
 // TestGlobalConfiguration - tests the global configuration
 func TestGlobalConfiguration(t *testing.T) {
@@ -27,47 +39,44 @@ func TestGlobalConfiguration(t *testing.T) {
 	assert.True(t, logh.Logger() != nil, "expected true")
 }
 
-func baseLoggerTest(t *testing.T, contexts []interface{}) {
+func (ts *testSuite) baseLoggerTest(contexts []interface{}) {
 
 	cl := logh.CreateContextualLogger(contexts...)
 
 	cl.Info().Msg("hello world")
 
 	storedContexts := cl.GetContexts()
-	assert.Equal(t, contexts, storedContexts, "expected same contexts")
+	ts.Equal(contexts, storedContexts, "expected same contexts")
 }
 
-func TestContextualLogger(t *testing.T) {
+func (ts *testSuite) TestContextualLogger() {
 
 	logh.ConfigureGlobalLogger(logh.INFO, logh.CONSOLE)
 
 	contexts := []interface{}{"context1", "test1", "context2", 2}
 
-	baseLoggerTest(t, contexts)
+	ts.baseLoggerTest(contexts)
 }
 
-func TestContextualCustomLogger(t *testing.T) {
+func (ts *testSuite) testBufferContents(expected string) {
 
-	writer := logh.NewStringWriter(256)
+	ts.Equal(expected, strings.Trim(string(ts.loggerBuffer.Bytes()), "\n"), "expected same log message")
+}
 
-	logh.ConfigureCustomLogger(logh.INFO, logh.JSON, writer)
+func (ts *testSuite) TestContextualCustomLogger() {
 
 	contexts := []interface{}{"context3", "test3", "context4", true}
 
 	now := time.Now()
 
-	baseLoggerTest(t, contexts)
+	ts.baseLoggerTest(contexts)
 
 	expected := fmt.Sprintf(`{"level":"info","context3":"test3","context4":true,"time":"%s","message":"hello world"}`, now.Format(time.RFC3339))
 
-	assert.Equal(t, expected, strings.Trim(string(writer.Bytes()), "\n"), "expected same log message")
+	ts.testBufferContents(expected)
 }
 
-func TestContextualLoggerAppend(t *testing.T) {
-
-	writer := logh.NewStringWriter(256)
-
-	logh.ConfigureCustomLogger(logh.INFO, logh.JSON, writer)
+func (ts *testSuite) TestContextualLoggerAppend() {
 
 	contexts := []interface{}{"context5", "test5"}
 
@@ -76,40 +85,49 @@ func TestContextualLoggerAppend(t *testing.T) {
 	cl := logh.CreateContextualLogger(contexts...)
 
 	err := cl.Append("context6", 6, "context7", 0.7)
-	assert.NoError(t, err, "expects no errors")
+	ts.NoError(err, "expects no errors")
 
 	cl.Info().Msg("append test")
 
 	expected := fmt.Sprintf(`{"level":"info","context5":"test5","context6":6,"context7":0.7,"time":"%s","message":"append test"}`, now.Format(time.RFC3339))
 
-	assert.Equal(t, expected, strings.Trim(string(writer.Bytes()), "\n"), "expected same log message")
+	ts.testBufferContents(expected)
 }
 
-func TestCreateFromContext(t *testing.T) {
+func (ts *testSuite) TestContextualLoggerMustAppend() {
 
-	writer := logh.NewStringWriter(256)
+	contexts := []interface{}{"context8", "test8"}
 
-	logh.ConfigureCustomLogger(logh.INFO, logh.JSON, writer)
+	now := time.Now()
+
+	cl := logh.CreateContextualLogger(contexts...)
+
+	cl.MustAppend("context9", 9, "context10", 0.1)
+
+	cl.Info().Msg("must append test")
+
+	expected := fmt.Sprintf(`{"level":"info","context8":"test8","context9":9,"context10":0.1,"time":"%s","message":"must append test"}`, now.Format(time.RFC3339))
+
+	ts.testBufferContents(expected)
+}
+
+func (ts *testSuite) TestCreateFromContext() {
 
 	cl := logh.CreateContextualLogger("root_key", "root_val")
 
 	now := time.Now()
 
 	ncl, err := cl.CreateFromContext("node_key1", 1, "node_key2", 2)
-	assert.NoError(t, err, "expects no errors")
+	ts.NoError(err, "expects no errors")
 
 	ncl.Info().Msg("create from context")
 
 	expected := fmt.Sprintf(`{"level":"info","root_key":"root_val","node_key1":1,"node_key2":2,"time":"%s","message":"create from context"}`, now.Format(time.RFC3339))
 
-	assert.Equal(t, expected, strings.Trim(string(writer.Bytes()), "\n"), "expected same log message")
+	ts.testBufferContents(expected)
 }
 
-func TestMustCreateFromContext(t *testing.T) {
-
-	writer := logh.NewStringWriter(256)
-
-	logh.ConfigureCustomLogger(logh.INFO, logh.JSON, writer)
+func (ts *testSuite) TestMustCreateFromContext() {
 
 	cl := logh.CreateContextualLogger("root_key", "root_val")
 
@@ -121,19 +139,17 @@ func TestMustCreateFromContext(t *testing.T) {
 
 	expected := fmt.Sprintf(`{"level":"info","root_key":"root_val","node_key3":3,"node_key4":4,"time":"%s","message":"must create from context"}`, now.Format(time.RFC3339))
 
-	assert.Equal(t, expected, strings.Trim(string(writer.Bytes()), "\n"), "expected same log message")
+	ts.testBufferContents(expected)
 }
 
 func getFileAndLine() (string, int) {
+
 	_, filename, line, _ := runtime.Caller(1)
+
 	return filename, line
 }
 
-func TestErrorLine(t *testing.T) {
-
-	writer := logh.NewStringWriter(256)
-
-	logh.ConfigureCustomLogger(logh.INFO, logh.JSON, writer)
+func (ts *testSuite) TestErrorLine() {
 
 	now := time.Now()
 
@@ -143,7 +159,12 @@ func TestErrorLine(t *testing.T) {
 	expectedLine += 2
 	logger.ErrorLine().Err(errors.New("test error")).Msg("message")
 
-	expected := fmt.Sprintf(`{"level":"error","_file_":"%s","_line_":%d,"pkg":"logh_test","error":"test error","time":"%s","message":"message"}`, expectedFilename, expectedLine, now.Format(time.RFC3339))
+	expected := fmt.Sprintf(`{"level":"error","@file":"%s","@line":%d,"pkg":"logh_test","error":"test error","time":"%s","message":"message"}`, expectedFilename, expectedLine, now.Format(time.RFC3339))
 
-	assert.Equal(t, expected, strings.Trim(string(writer.Bytes()), "\n"), "expected same log message")
+	ts.testBufferContents(expected)
+}
+
+func TestSuite(t *testing.T) {
+
+	suite.Run(t, new(testSuite))
 }

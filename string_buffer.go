@@ -2,15 +2,16 @@ package logh
 
 import "io"
 
-type stringWriter struct {
+// StringWriter - writes in memory
+type StringWriter struct {
 	buffer []byte
 	index  uint64
 	size   uint64
 }
 
-func NewStringWriter(size uint64) *stringWriter {
+func NewStringWriter(size uint64) *StringWriter {
 
-	return &stringWriter{
+	return &StringWriter{
 		buffer: make([]byte, size),
 		index:  0,
 		size:   size,
@@ -18,7 +19,7 @@ func NewStringWriter(size uint64) *stringWriter {
 }
 
 // Write - implements the io.Writer interface
-func (sb *stringWriter) Write(p []byte) (n int, err error) {
+func (sb *StringWriter) Write(p []byte) (n int, err error) {
 
 	for i := 0; i < len(p); i++ {
 
@@ -35,13 +36,13 @@ func (sb *stringWriter) Write(p []byte) (n int, err error) {
 }
 
 // Write - implements the io.Writer interface
-func (sb *stringWriter) Reset() {
+func (sb *StringWriter) Reset() {
 
 	sb.index = 0
 }
 
 // Bytes - return the stored bytes
-func (sb *stringWriter) Bytes() []byte {
+func (sb *StringWriter) Bytes() []byte {
 
 	return sb.buffer[0:sb.index]
 }

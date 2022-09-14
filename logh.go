@@ -7,6 +7,7 @@ import (
 	"os"
 	"reflect"
 	"runtime"
+	"sort"
 
 	"github.com/rs/zerolog"
 )
@@ -82,10 +83,49 @@ var (
 	ErrWrongNumberOfArgs error = errors.New("the number of arguments must be even")
 )
 
+type keyValue struct {
+	key    string
+	value  interface{}
+	rvalue reflect.Value
+	kind   reflect.Kind
+}
+
+func newItem(key string, value interface{}) keyValue {
+
+	rvalue := reflect.ValueOf(value)
+
+	return keyValue{
+		key:    key,
+		value:  value,
+		rvalue: rvalue,
+		kind:   rvalue.Kind(),
+	}
+}
+
+// byKey - implements sort.Interface based on the Key field.
+type byKey []keyValue
+
+// Len - returns the length
+func (s byKey) Len() int {
+
+	return len(s)
+}
+
+// Less - compares
+func (s byKey) Less(i, j int) bool {
+
+	return (len(s[i].key) == len(s[j].key)) && s[i].key < s[j].key
+}
+
+// Swap - swap indexes
+func (s byKey) Swap(i, j int) {
+
+	s[i], s[j] = s[j], s[i]
+}
+
 // ContextualLogger - a struct containing all valid event loggers (each one can be null if not enabled)
 type ContextualLogger struct {
-	numKeyValues int
-	keyValues    []interface{}
+	keyValues []keyValue
 }
 
 // Info - returns the event logger using the configured context
@@ -111,17 +151,23 @@ func (cl *ContextualLogger) Error() *zerolog.Event {
 // ErrorLine - returns the event logger using the configured context
 func (cl *ContextualLogger) ErrorLine() *zerolog.Event {
 
-	_, filename, line, ok := runtime.Caller(1)
+	return cl.ErrorLineC(2)
+}
+
+// ErrorLineC - returns the event logger using the configured context
+func (cl *ContextualLogger) ErrorLineC(skippedStackFrames int) *zerolog.Event {
+
+	_, filename, line, ok := runtime.Caller(skippedStackFrames)
 	ev := Error()
 	if !ok {
 		filename = "unknown"
 		line = -1
 	}
 
-	ev = ev.Str("_file_", filename)
+	ev = ev.Str("@file", filename)
 
 	if ok {
-		ev = ev.Int("_line_", line)
+		ev = ev.Int("@line", line)
 	}
 
 	return cl.addContext(ev)
@@ -245,6 +291,20 @@ func Logger() *zerolog.Logger {
 	return &logger
 }
 
+func toKeyValueArray(keyValues ...interface{}) []keyValue {
+
+	numKeyValues := len(keyValues)
+
+	items := make([]keyValue, numKeyValues/2)
+	j := 0
+	for i := 0; i < numKeyValues; i += 2 {
+		items[j] = newItem(keyValues[i].(string), keyValues[i+1])
+		j++
+	}
+
+	return items
+}
+
 // CreateContextualLogger - creates loggers with context
 func CreateContextualLogger(keyValues ...interface{}) *ContextualLogger {
 
@@ -253,9 +313,11 @@ func CreateContextualLogger(keyValues ...interface{}) *ContextualLogger {
 		panic(ErrWrongNumberOfArgs)
 	}
 
+	kvs := toKeyValueArray(keyValues...)
+	sort.Sort(byKey(kvs))
+
 	return &ContextualLogger{
-		numKeyValues: numKeyValues,
-		keyValues:    keyValues,
+		keyValues: kvs,
 	}
 }
 
@@ -267,10 +329,20 @@ func (cl *ContextualLogger) Append(keyValues ...interface{}) error {
 		return ErrWrongNumberOfArgs
 	}
 
-	cl.keyValues = append(cl.keyValues, keyValues...)
-	cl.numKeyValues += numKeyValues
+	cl.keyValues = append(cl.keyValues, toKeyValueArray(keyValues...)...)
+
+	sort.Sort(byKey(cl.keyValues))
 
 	return nil
+}
+
+// MustAppend - appends more context, panics if any error is founbd
+func (cl *ContextualLogger) MustAppend(keyValues ...interface{}) {
+
+	err := cl.Append(keyValues...)
+	if err != nil {
+		panic(err)
+	}
 }
 
 // addContext - add event logger context
@@ -280,72 +352,69 @@ func (cl *ContextualLogger) addContext(eventlLogger *zerolog.Event) *zerolog.Eve
 		return nil
 	}
 
-	for j := 0; j < cl.numKeyValues; j += 2 {
+	for j := 0; j < len(cl.keyValues); j++ {
 
-		key := cl.keyValues[j].(string)
-		value := reflect.ValueOf(cl.keyValues[j+1])
-
-		switch value.Kind() {
+		switch cl.keyValues[j].kind {
 
 		case reflect.String:
 
-			eventlLogger = eventlLogger.Str(key, value.String())
+			eventlLogger = eventlLogger.Str(cl.keyValues[j].key, cl.keyValues[j].rvalue.String())
 
 		case reflect.Int:
 
-			eventlLogger = eventlLogger.Int(key, int(value.Int()))
+			eventlLogger = eventlLogger.Int(cl.keyValues[j].key, int(cl.keyValues[j].rvalue.Int()))
 
 		case reflect.Int8:
 
-			eventlLogger = eventlLogger.Int8(key, int8(value.Int()))
+			eventlLogger = eventlLogger.Int8(cl.keyValues[j].key, int8(cl.keyValues[j].rvalue.Int()))
 
 		case reflect.Int16:
 
-			eventlLogger = eventlLogger.Int16(key, int16(value.Int()))
+			eventlLogger = eventlLogger.Int16(cl.keyValues[j].key, int16(cl.keyValues[j].rvalue.Int()))
 
 		case reflect.Int32:
 
-			eventlLogger = eventlLogger.Int32(key, int32(value.Int()))
+			eventlLogger = eventlLogger.Int32(cl.keyValues[j].key, int32(cl.keyValues[j].rvalue.Int()))
 
 		case reflect.Int64:
 
-			eventlLogger = eventlLogger.Int64(key, value.Int())
+			eventlLogger = eventlLogger.Int64(cl.keyValues[j].key, cl.keyValues[j].rvalue.Int())
 
 		case reflect.Uint:
 
-			eventlLogger = eventlLogger.Uint(key, uint(value.Uint()))
+			eventlLogger = eventlLogger.Uint(cl.keyValues[j].key, uint(cl.keyValues[j].rvalue.Uint()))
 
 		case reflect.Uint8:
 
-			eventlLogger = eventlLogger.Uint8(key, uint8(value.Uint()))
+			eventlLogger = eventlLogger.Uint8(cl.keyValues[j].key, uint8(cl.keyValues[j].rvalue.Uint()))
 
 		case reflect.Uint16:
 
-			eventlLogger = eventlLogger.Uint16(key, uint16(value.Uint()))
+			eventlLogger = eventlLogger.Uint16(cl.keyValues[j].key, uint16(cl.keyValues[j].rvalue.Uint()))
 
 		case reflect.Uint32:
 
-			eventlLogger = eventlLogger.Uint32(key, uint32(value.Uint()))
+			eventlLogger = eventlLogger.Uint32(cl.keyValues[j].key, uint32(cl.keyValues[j].rvalue.Uint()))
 
 		case reflect.Uint64:
 
-			eventlLogger = eventlLogger.Uint64(key, value.Uint())
+			eventlLogger = eventlLogger.Uint64(cl.keyValues[j].key, cl.keyValues[j].rvalue.Uint())
 
 		case reflect.Float32:
 
-			eventlLogger = eventlLogger.Float32(key, float32(value.Float()))
+			eventlLogger = eventlLogger.Float32(cl.keyValues[j].key, float32(cl.keyValues[j].rvalue.Float()))
 
 		case reflect.Float64:
 
-			eventlLogger = eventlLogger.Float64(key, value.Float())
+			eventlLogger = eventlLogger.Float64(cl.keyValues[j].key, cl.keyValues[j].rvalue.Float())
 
 		case reflect.Bool:
 
-			eventlLogger = eventlLogger.Bool(key, value.Bool())
+			eventlLogger = eventlLogger.Bool(cl.keyValues[j].key, cl.keyValues[j].rvalue.Bool())
 
 		default:
 
-			eventlLogger = eventlLogger.Interface(key, value.Interface())
+			eventlLogger = eventlLogger.Interface(cl.keyValues[j].key, cl.keyValues[j].rvalue.Interface())
 		}
 	}
 
@@ -355,28 +424,39 @@ func (cl *ContextualLogger) addContext(eventlLogger *zerolog.Event) *zerolog.Eve
 // GetContexts - returns the logger contexts
 func (cl *ContextualLogger) GetContexts() []interface{} {
 
-	return cl.keyValues
+	oldKVs := make([]interface{}, len(cl.keyValues)*2)
+
+	i := 0
+	for _, item := range cl.keyValues {
+		oldKVs[i] = item.key
+		oldKVs[i+1] = item.value
+		i += 2
+	}
+
+	return oldKVs
 }
 
 // CreateFromContext - creates a new logger context from this context
-func (el *ContextualLogger) CreateFromContext(keyValues ...interface{}) (*ContextualLogger, error) {
+func (cl *ContextualLogger) CreateFromContext(keyValues ...interface{}) (*ContextualLogger, error) {
 
-	cl := CreateContextualLogger(el.keyValues...)
-	err := cl.Append(keyValues...)
+	oldKVs := cl.GetContexts()
+
+	ccl := CreateContextualLogger(oldKVs...)
+	err := ccl.Append(keyValues...)
 	if err != nil {
 		return nil, err
 	}
 
-	return cl, nil
+	return ccl, nil
 }
 
 // MustCreateFromContext - creates a new logger context from this context, raises panic if some error
-func (el *ContextualLogger) MustCreateFromContext(keyValues ...interface{}) *ContextualLogger {
+func (cl *ContextualLogger) MustCreateFromContext(keyValues ...interface{}) *ContextualLogger {
 
-	cl, err := el.CreateFromContext(keyValues...)
+	ccl, err := cl.CreateFromContext(keyValues...)
 	if err != nil {
 		panic(err)
 	}
 
-	return cl
+	return ccl
 }

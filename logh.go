@@ -8,6 +8,7 @@ import (
 	"reflect"
 	"runtime"
 	"sort"
+	"sync"
 
 	"github.com/rs/zerolog"
 )
@@ -81,6 +82,8 @@ var (
 
 	// ErrWrongNumberOfArgs ...
 	ErrWrongNumberOfArgs error = errors.New("the number of arguments must be even")
+
+	mutex sync.Mutex
 )
 
 type keyValue struct {
@@ -191,6 +194,9 @@ func ConfigureGlobalLogger(lvl Level, fmt Format) *zerolog.Logger {
 
 // ConfigureCustomLogger - configures the logger globally
 func ConfigureCustomLogger(lvl Level, fmt Format, out io.Writer) *zerolog.Logger {
+
+	mutex.Lock()
+	defer mutex.Unlock()
 
 	switch lvl {
 	case INFO:

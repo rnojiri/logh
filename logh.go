@@ -8,6 +8,7 @@ import (
 	"reflect"
 	"runtime"
 	"sort"
+	"strings"
 	"sync"
 
 	"github.com/rs/zerolog"
@@ -174,6 +175,27 @@ func (cl *ContextualLogger) ErrorLineC(skippedStackFrames int) *zerolog.Event {
 	}
 
 	return cl.addContext(ev)
+}
+
+// LogErrorStack - returns the event logger using the configured context
+func (cl *ContextualLogger) LogErrorStack(err error) {
+
+	b := strings.Builder{}
+
+	for i := 1; ; i++ {
+
+		pc, filename, line, ok := runtime.Caller(i)
+
+		funcName := runtime.FuncForPC(pc).Name()
+
+		if !ok {
+			break
+		}
+
+		b.WriteString(fmt.Sprintf("(%s:%d) %s\n", filename, line, funcName))
+	}
+
+	Error().Err(err).Msgf("\n%s", b.String())
 }
 
 // Fatal - returns the event logger using the configured context

@@ -12,7 +12,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/suite"
 
-	"github.com/uol/logh"
+	"github.com/rnojiri/logh"
 )
 
 type testSuite struct {

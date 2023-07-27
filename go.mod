@@ -1,4 +1,4 @@
-module github.com/uol/logh
+module github.com/rnojiri/logh
 
 go 1.19
 

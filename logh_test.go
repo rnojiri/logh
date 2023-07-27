@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"runtime"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -21,7 +22,7 @@ type testSuite struct {
 
 func (ts *testSuite) SetupTest() {
 
-	ts.loggerBuffer = logh.NewStringWriter(256)
+	ts.loggerBuffer = logh.NewStringWriter(2048)
 	logh.ConfigureCustomLogger(logh.INFO, logh.JSON, ts.loggerBuffer)
 }
 
@@ -160,6 +161,38 @@ func (ts *testSuite) TestErrorLine() {
 	logger.ErrorLine().Err(errors.New("test error")).Msg("message")
 
 	expected := fmt.Sprintf(`{"level":"error","@file":"%s","@line":%d,"pkg":"logh_test","error":"test error","time":"%s","message":"message"}`, expectedFilename, expectedLine, now.Format(time.RFC3339))
+
+	ts.testBufferContents(expected)
+}
+
+func (ts *testSuite) TestLogErrorStack() {
+
+	now := time.Now()
+
+	logger := logh.CreateContextualLogger("pkg", "logh_test")
+
+	message := "\\n"
+
+	logger.LogErrorStack(errors.New("test error"))
+
+	for i := 0; ; i++ {
+
+		pc, filename, line, ok := runtime.Caller(i)
+
+		if i == 0 && line == 180 {
+			line = 176
+		}
+
+		funcName := runtime.FuncForPC(pc).Name()
+
+		if !ok {
+			break
+		}
+
+		message += "(" + filename + ":" + strconv.Itoa(line) + ") " + funcName + "\\n"
+	}
+
+	expected := fmt.Sprintf(`{"level":"error","error":"test error","time":"%s","message":"%s"}`, now.Format(time.RFC3339), message)
 
 	ts.testBufferContents(expected)
 }
